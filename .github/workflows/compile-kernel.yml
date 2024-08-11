@@ -134,11 +134,10 @@ jobs:
         working-directory: /builder
         run: |
           df -hT ${PWD}
-          echo ${GITHUB_ACTION_PATH}
-          ls ${GITHUB_ACTION_PATH}
+          git clone https://github.com/Haris131/amlogic-s9xxx-armbian
           mkdir -p /builder/{kernel,output}
-          ln -sf /builder/kernel /home/runner/work/_actions/haris131/amlogic-s9xxx-armbian/main/compile-kernel/kernel
-          ln -sf /builder/output /home/runner/work/_actions/haris131/amlogic-s9xxx-armbian/main/compile-kernel/output
+          ln -sf /builder/kernel /builder/amlogic-s9xxx-armbian/compile-kernel/kernel
+          ln -sf /builder/output /builder/amlogic-s9xxx-armbian/compile-kernel/output
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Compile the kernel [ ${{ inputs.kernel_version }} ]
