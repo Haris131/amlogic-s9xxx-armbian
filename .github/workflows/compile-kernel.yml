@@ -74,10 +74,10 @@ on:
         type: choice
         options:
           - -ophub
-          - -yourname
+          - -chewy
 
 env:
-  TZ: America/New_York
+  TZ: Asia/Jakarta
 
 jobs:
   build:
@@ -135,22 +135,71 @@ jobs:
         run: |
           df -hT ${PWD}
           mkdir -p /builder/{kernel,output}
-          ln -sf /builder/kernel /home/runner/work/_actions/ophub/amlogic-s9xxx-armbian/main/compile-kernel/kernel
-          ln -sf /builder/output /home/runner/work/_actions/ophub/amlogic-s9xxx-armbian/main/compile-kernel/output
+          ln -sf /builder/kernel /home/runner/work/_actions/haris131/amlogic-s9xxx-armbian/main/compile-kernel/kernel
+          ln -sf /builder/output /home/runner/work/_actions/haris131/amlogic-s9xxx-armbian/main/compile-kernel/output
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Compile the kernel [ ${{ inputs.kernel_version }} ]
-        uses: ophub/amlogic-s9xxx-armbian@main
         if: ${{ steps.mapped.outputs.status }} == 'success' && !cancelled()
-        with:
-          build_target: kernel
-          kernel_source: ${{ inputs.kernel_source }}
-          kernel_version: ${{ inputs.kernel_version }}
-          kernel_auto: ${{ inputs.kernel_auto }}
-          kernel_package: ${{ inputs.kernel_package }}
-          kernel_sign: ${{ inputs.kernel_sign }}
-          kernel_toolchain: ${{ inputs.kernel_toolchain }}
-          compress_format: ${{ inputs.compress_format }}
+        run: |
+          cd ${GITHUB_ACTION_PATH}
+          echo -e "Current running path: [ ${PWD} ]"
+          echo -e "Start compile kernel..."
+          
+          config_filepath="compile-kernel/tools/config"
+          kernel_outpath="compile-kernel/output"
+          [[ -d "${config_filepath}" ]] || mkdir -p ${config_filepath}
+          if [[ -n "${{ inputs.kernel_config }}" && "${{ inputs.kernel_config }}" != "false" ]]; then
+              if [[ "$(ls ${GITHUB_WORKSPACE}/${{ inputs.kernel_config }}/config-* -l 2>/dev/null | grep "^-" | wc -l)" -ne "0" ]]; then
+                  echo -e "Use a custom kernel compilation template..."
+                  rm -f ${config_filepath}/* 2>/dev/null && sync
+                  cp -vf ${GITHUB_WORKSPACE}/${{ inputs.kernel_config }}/config-* ${config_filepath}/ 2>/dev/null && sync
+                  echo -e "List of Kernel Custom Compilation Configuration Templates: \n$(ls -l ${config_filepath})"
+              else
+                  echo -e "The custom kernel compilation template path is invalid, continue to use the default template."
+              fi
+          else
+              echo -e "Use the default kernel compilation template."
+          fi
+
+          custom_kernel_patch="compile-kernel/tools/patch"
+          [[ -d "${custom_kernel_patch}" ]] || mkdir -p ${custom_kernel_patch}
+          if [[ -n "${{ inputs.kernel_patch }}" && "${{ inputs.kernel_patch }}" != "false" ]]; then
+              if [[ -d "${GITHUB_WORKSPACE}/${{ inputs.kernel_patch }}" ]]; then
+                  echo -e "Use custom kernel patches..."
+                  rm -rf ${custom_kernel_patch}/* 2>/dev/null && sync
+                  cp -vrf ${GITHUB_WORKSPACE}/${{ inputs.kernel_patch }}/* -t ${custom_kernel_patch} && sync
+                  echo -e "Directory of custom kernel patches: \n$(ls -l ${custom_kernel_patch})"
+              else
+                  echo -e "Invalid custom kernel patch directory, skipping."
+              fi
+          else
+              echo -e "No custom kernel patches available."
+          fi
+
+          make_command=""
+          [[ -n "${{ inputs.kernel_source }}" ]] && make_command="${make_command} -r ${{ inputs.kernel_source }}"
+          [[ -n "${{ inputs.kernel_version }}" ]] && make_command="${make_command} -k ${{ inputs.kernel_version }}"
+          [[ -n "${{ inputs.kernel_auto }}" ]] && make_command="${make_command} -a ${{ inputs.kernel_auto }}"
+          [[ -n "${{ inputs.kernel_package }}" ]] && make_command="${make_command} -m ${{ inputs.kernel_package }}"
+          [[ -n "${{ inputs.auto_patch }}" ]] && make_command="${make_command} -p ${{ inputs.auto_patch }}"
+          [[ -n "${{ inputs.kernel_sign }}" ]] && make_command="${make_command} -n ${{ inputs.kernel_sign }}"
+          [[ -n "${{ inputs.kernel_toolchain }}" ]] && make_command="${make_command} -t ${{ inputs.kernel_toolchain }}"
+          [[ -n "${{ inputs.compress_format }}" ]] && make_command="${make_command} -c ${{ inputs.compress_format }}"
+          sudo ./recompile ${make_command}
+
+          cd ${GITHUB_ACTION_PATH}
+          output_tags="$(ls -l ${PWD}/${kernel_outpath}/*.tar.gz | awk '{print $9}' | grep -oE '[1-9][0-9]{0,2}\.[0-9]{1,3}\.[0-9]+' | xargs | tr "[ ]" "_")"
+          echo -e "Output environment variables."
+          echo "PACKAGED_OUTPUTTAGS=${output_tags}" >> ${GITHUB_ENV}
+          echo "PACKAGED_OUTPUTPATH=${PWD}/${kernel_outpath}" >> ${GITHUB_ENV}
+          echo "PACKAGED_OUTPUTDATE=$(date +"%m.%d.%H%M")" >> ${GITHUB_ENV}
+          echo "PACKAGED_STATUS=success" >> ${GITHUB_ENV}
+          echo -e "PACKAGED_OUTPUTTAGS: ${output_tags}"
+          echo -e "PACKAGED_OUTPUTPATH: ${PWD}/${kernel_outpath}"
+          echo -e "PACKAGED_OUTPUTDATE: $(date +"%m.%d.%H%M")"
+          echo -e "PACKAGED_STATUS: success"
+          echo -e "PACKAGED_OUTPUTPATH files list: \n$(ls -l ${PWD}/${kernel_outpath} 2>/dev/null)"
 
       - name: Upload Kernel to Release
         uses: ncipollo/release-action@main
