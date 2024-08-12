@@ -67,14 +67,6 @@ on:
           - gzip
           - zstd
           - lzma
-      kernel_sign:
-        description: "Set the kernel custom signature"
-        required: false
-        default: "-chewy"
-        type: choice
-        options:
-          - -ophub
-          - -chewy
 
 env:
   TZ: Asia/Jakarta
@@ -185,7 +177,6 @@ jobs:
           [[ -n "${{ inputs.kernel_auto }}" ]] && make_command="${make_command} -a ${{ inputs.kernel_auto }}"
           [[ -n "${{ inputs.kernel_package }}" ]] && make_command="${make_command} -m ${{ inputs.kernel_package }}"
           [[ -n "${{ inputs.auto_patch }}" ]] && make_command="${make_command} -p ${{ inputs.auto_patch }}"
-          [[ -n "${{ inputs.kernel_sign }}" ]] && make_command="${make_command} -n ${{ inputs.kernel_sign }}"
           [[ -n "${{ inputs.kernel_toolchain }}" ]] && make_command="${make_command} -t ${{ inputs.kernel_toolchain }}"
           [[ -n "${{ inputs.compress_format }}" ]] && make_command="${make_command} -c ${{ inputs.compress_format }}"
           sudo ./recompile ${make_command}
